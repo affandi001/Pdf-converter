@@ -1,52 +1,102 @@
-import React, { useState } from 'react';
-import { Document, Page } from 'react-pdf';
-import { useDropzone } from 'react-dropzone';
+import React, {useRef, useState} from 'react';
+import {Document, Page, pdfjs} from 'react-pdf';
 
-const FileUpload = () => {
-  const [file, setFile] = useState(null);
-  const [numPages, setNumPages] = useState(null);
-  const [warningMessage, setWarningMessage] = useState('');
+// Set the worker path for pdf.js
+pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
-  const { getRootProps, getInputProps } = useDropzone({
-    accept: '.pdf',
-    onDrop: acceptedFiles => {
-      acceptedFiles.forEach(acceptedFile => {
-        if (acceptedFile.type !== 'application/pdf') {
-          setWarningMessage('Only PDF files are supported!');
-          return;
-        }
-        setWarningMessage('');
-        setFile(acceptedFile);
-      });
-    }
-  });
+const PdfViewer = ({file, extractedData}) => {
+  const [numPages, setNumPages] = useState (null);
 
-  const onDocumentLoadSuccess = ({ numPages }) => {
-    setNumPages(numPages);
+  const onDocumentLoadSuccess = ({numPages}) => {
+    setNumPages (numPages);
   };
 
   return (
-    <div className='flex justify-center'>
-    <div {...getRootProps({ className: 'bg-gray-200 rounded-lg p-10' })}>
-      <input {...getInputProps()} />
-      <div className="flex items-center text-gray-700">
-        <svg className="w-10 h-10 fill-current" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5a2.5 2.5 0 0 1 5 0v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5a2.5 2.5 0 0 0 5 0V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/></svg>
-        <p className="ml-4 font-medium">Drag 'n' drop some files here, or click to select files</p>
+    <div className="p-4 mt-8  border border-gray-300">
+      <p className="mb-4 text-xl font-bold">Number of Pages: {numPages}</p>
+      <div className="">
+        <Document
+          file={file}
+          onLoadSuccess={onDocumentLoadSuccess}
+          className="border-8 border-black border-dotted"
+        >
+          {Array.from (new Array (numPages), (_, index) => (
+            <Page
+              key={index}
+              pageNumber={index + 1}
+              className="mb-4 max-w-[1200px] mx-auto flex justify-center space-x-32 pt-8 "
+            />
+          ))}
+        </Document>
       </div>
-      <div className="mt-10">
-        {warningMessage && <p className="text-red-500 font-medium">{warningMessage}</p>}
-        {file && (
-          <div>
-            <Document file={file} onLoadSuccess={onDocumentLoadSuccess}>
-              {Array.from(Array(numPages).keys()).map(page => (
-                <Page key={page} pageNumber={page + 1} />
-              ))}
-            </Document>
-          </div>
-        )}
+      <div className="absolute">
+        <h4>Extracted Data</h4>
+        <pre>{extractedData}</pre>
       </div>
     </div>
-    </div>
-  )};
+  );
+};
 
-export default FileUpload;
+const PdfUploader = () => {
+  const fileInputRef = useRef (null);
+  const [selectedFile, setSelectedFile] = useState (null);
+  const [extractedData, setExtractedData] = useState ('');
+
+  const handleFileChange = event => {
+    const file = event.target.files[0];
+    setSelectedFile (file);
+  };
+
+  const handleUpload = () => {
+    if (selectedFile && selectedFile.type === 'application/pdf') {
+      const reader = new FileReader ();
+      reader.onload = async e => {
+        const buffer = e.target.result;
+        const pdf = await pdfjs.getDocument (buffer).promise;
+        const totalPages = pdf.numPages;
+        let extractedText = '';
+
+        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+          const page = await pdf.getPage (pageNum);
+          const textContent = await page.getTextContent ();
+
+          extractedText += textContent.items.map (item => item.str).join (' ');
+
+          console.log (extractedText, 'text content');
+        }
+        setExtractedData (extractedText);
+      };
+
+      reader.readAsArrayBuffer (selectedFile);
+      setSelectedFile (null);
+    }
+  };
+
+  return (
+    <div className="max-w-[1200px] py-8 mx-auto">
+      <div className="flex items-center justify-center mb-4">
+        <input
+          type="file"
+          accept=".pdf"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          className="hidden"
+          id="file-upload"
+        />
+        <label
+          htmlFor="file-upload"
+          className="px-4 py-2 font-bold text-white bg-blue-500 rounded cursor-pointer hover:bg-blue-700"
+        >
+          Select PDF
+        </label>
+        {selectedFile &&
+          <p className="ml-4">Selected file: {selectedFile.name}</p>}
+      </div>
+      <div className="flex justify-center" />
+      {selectedFile &&
+        <PdfViewer file={selectedFile} extractedData={extractedData} />}
+    </div>
+  );
+};
+
+export default PdfUploader;

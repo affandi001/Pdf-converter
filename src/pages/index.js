@@ -11,7 +11,7 @@ export default function Home() {
     <>
       <div className="">
         <div className="pt-4">
-          <h1 className="text-center text-3xl font-bold ">File converter</h1>
+          <h1 className="text-3xl font-bold text-center ">File converter</h1>
         </div>
 
         <div className="mt-10">
